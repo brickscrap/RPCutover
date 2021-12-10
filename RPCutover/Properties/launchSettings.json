@@ -1,7 +1,8 @@
 {
   "profiles": {
     "RPCutover": {
-      "commandName": "Project"
+      "commandName": "Project",
+      "commandLineArgs": "convert \"C:\\Users\\GaryM\\source\\repos\\RPCutover\\Test\""
     }
   }
 }

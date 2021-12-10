@@ -15,6 +15,9 @@ namespace RPCutover.Handlers
             string dnFilePath = "";
             string tkFilePath = "";
 
+            if (!Directory.Exists(folderPath))
+                return 1;
+
             foreach (var item in Directory.EnumerateFiles(folderPath).Where(x => Path.GetFileName(x).StartsWith("SiteStockexport_")))
             {
                 if (item.Contains("DN"))
@@ -23,13 +26,19 @@ namespace RPCutover.Handlers
                     tkFilePath = item;
             }
 
+            if (string.IsNullOrEmpty(dnFilePath) || string.IsNullOrEmpty(tkFilePath))
+                return 1;
+
+            Console.WriteLine($"Adding linebreak to DN file: {Path.GetFileName(dnFilePath)}");
             string[] newFile = AddLineBreakToFirstLine(dnFilePath);
             await File.WriteAllLinesAsync(dnFilePath, newFile);
 
+            Console.WriteLine($"Adding linebreak to TK file: {Path.GetFileName(tkFilePath)}");
             newFile = AddLineBreakToFirstLine(tkFilePath);
             await File.WriteAllLinesAsync(tkFilePath, newFile);
 
             // Re-open DN as CSV
+            Console.WriteLine($"Reading DN file.");
             string[] dnFile = await File.ReadAllLinesAsync(dnFilePath);
 
             List<StockExportModel> dnExport = dnFile
@@ -38,7 +47,10 @@ namespace RPCutover.Handlers
                 .Select(x => new StockExportModel(x))
                 .ToList();
 
+            Console.WriteLine($"DN file read, {dnExport.Count} entries found.");
+
             // Re-open TK as CSV
+            Console.WriteLine($"Reading TK file.");
             string[] tkFile = await File.ReadAllLinesAsync(tkFilePath);
 
             List<StockExportModel> tkExport = tkFile
@@ -46,6 +58,8 @@ namespace RPCutover.Handlers
                 .Select(x => x.Split(','))
                 .Select(x => new StockExportModel(x))
                 .ToList();
+
+            Console.WriteLine($"TK file read, {tkExport.Count} entries found.");
 
             //  Replace the On_Hand_Quantity's with those of the DN file (lookup vs Product_External_ID)
             foreach (var item in tkExport)
@@ -68,13 +82,24 @@ namespace RPCutover.Handlers
             var yest = DateTime.Now.AddDays(-1);
             var yesterday = yest.ToString("yyyy-MM-dd");
 
+            Console.WriteLine("Creating Stock_Upload.csv");
             List<string> csvOutput = new() { "Site_Internal_ID,Worksheet_ID,Product_Internal_ID,On_Hand_Quantity,Count_Date" };
             foreach (var item in tkExport)
             {
                 csvOutput.Add($"{item.Site_Internal_ID},1068175,{item.Product_Internal_ID},{item.On_Hand_Quantity},{yesterday} 23:59:59");
             }
 
-            await File.WriteAllLinesAsync(@"C:\Users\GaryM\source\repos\RPCutover\Test\Stock_Upload.csv", csvOutput.ToArray());
+            try
+            {
+                await File.WriteAllLinesAsync(@$"{folderPath}\Stock_Import.csv", csvOutput.ToArray());
+                Console.WriteLine($"Stock_Upload.csv generated in {folderPath}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error creating Stock_Import.csv");
+                Console.WriteLine($"Error: {ex.Message}");
+                return 1;
+            }
 
             return 0;
         }
